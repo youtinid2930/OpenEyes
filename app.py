@@ -4,6 +4,7 @@ from scipy.spatial import distance
 from pygame import mixer
 import mediapipe as mp
 import tkinter as tk
+from tkinter import ttk
 from tkinter import Label
 from PIL import Image, ImageTk
 
@@ -40,8 +41,8 @@ def start_detection():
     global cap, running
     running = True
     startButton.pack_forget()
-    stopButton.pack()
-    btn_test.pack()
+    stopButton.place(x=100, y=550)
+    btn_test.place(x=250, y=550)
     cap = cv2.VideoCapture(0)
     detect()
 
@@ -196,6 +197,9 @@ def detect():
         return
 
     ret, frame = cap.read()
+    if ret:
+        height, width, channels = frame.shape  # Get the dimensions
+        print(f"Width: {width}, Height: {height}, Channels: {channels}")
     if not ret:
         return
 
@@ -260,22 +264,62 @@ running = False
 
 draw_contours = False
 
-# Tkinter GUI
 root = tk.Tk()
-root.title("Driver Fatigue Detector")
+root.title("OpenEyes")
+root.geometry("640x640")
+root.resizable(False, False)
 
-videoLabel = Label(root)
-videoLabel.pack()
-
-startButton = tk.Button(root, text="Start Detection", command=start_detection)
-startButton.pack()
-
-stopButton = tk.Button(root, text="Stop Detection", command=stop_detection)
-stopButton.pack_forget()
-
-btn_test = tk.Button(root, text="Draw eyes contours", command=controlleDrawContour)
-btn_test.pack_forget()
+root.configure(bg="#121212")  # Dark background
 
 
 
+
+
+background_image = Image.open("./asset/image-640x640.png")  # Replace with your image file
+  # Resize to fixed window size
+bg_image = ImageTk.PhotoImage(background_image)
+
+# Create a label to hold the background image
+bg_label = tk.Label(root, image=bg_image)
+bg_label.place(x=0, y=0, relwidth=1, relheight=1) 
+
+
+# Styles
+
+
+button_style = {
+    "bg": "#1E88E5",  # Blue background
+    "fg": "white",  # White text
+    "activebackground": "#1565C0",  # Darker blue on hover
+    "activeforeground": "white",  # White text on hover
+    "font": ("Helvetica", 9, "bold"),
+    "bd": 0,  # Borderless
+    "relief": "flat",
+    "width": 20,
+    "height": 2
+}
+
+label_style = {
+    "bg": "#1E88E5",  # Match the background
+    "fg": "white",  # White text
+    "font": ("Helvetica", 14, "bold")
+}
+
+# Video Label
+videoLabel = Label(root, text="Keeping Drivers Awake, One Blink at a Time", **label_style)
+videoLabel.pack(pady=20)
+
+# Buttons
+startButton = tk.Button(root, text="Start Detection", command=start_detection, **button_style)
+startButton.pack(pady=10)
+
+stopButton = tk.Button(root, text="Stop Detection", command=stop_detection, **button_style)
+stopButton.pack_forget()  # Initially hidden
+
+btn_test = tk.Button(root, text="Draw Eyes", command=controlleDrawContour, **button_style)
+btn_test.pack_forget()  # Initially hidden
+
+
+
+# Main Loop
 root.mainloop()
