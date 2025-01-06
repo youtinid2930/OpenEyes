@@ -40,15 +40,21 @@ def mouth_aspect_ratio(mouth):
 def start_detection():
     global cap, running
     running = True
+    # pack or forget the button in the window
     startButton.pack_forget()
-    stopButton.place(x=100, y=550)
-    btn_test.place(x=250, y=550)
+    stopButton.place(x=120, y=550)
+    drawEyesButton.place(x=220, y=550)
+    drawMouthButton.place(x=320, y=550)
+    drawFaceLandmarksButton.place(x=420, y=550)
+
     cap = cv2.VideoCapture(0)
     detect()
 
 # Function to stop Detection
 def stop_detection():
     global running, cap
+    stopButton.pack_forget()
+    startButton.place(x=20, y=550)
     running = False
     cap.release()
 
@@ -129,7 +135,7 @@ def drawContour(frame, area):
     cv2.polylines(frame, [np.array(area, dtype=np.int32)], isClosed=True, color=(0, 0, 255), thickness=2)
 
 # Fucntion Calculer le taux de fatigue par le nombre de clairement
-def tauxFatigueByClairement(nombreClairement):
+def tauxFatigueByClaignement(nombreClairement):
     if nombreClairement < 10:
         return 10  # Fatigue légère constante
     elif 10 <= nombreClairement <= 20:
@@ -171,24 +177,55 @@ def tauxFatigueByClin(clins):
 # Functions calcule taux fatigue avec nombre de headDrop
 def tauxFatiguebyHeadDrop(nbre_headDrop):
        if nbre_headDrop == 0:
-              return 0  # Pas de fatigue
+              return 0, 0  # Pas de fatigue
        elif 1 <= nbre_headDrop <= 3:
-              return 20 * nbre_headDrop  # Fatigue modérée
+              return 1, 20 * nbre_headDrop  # Fatigue modérée
        elif nbre_headDrop > 3:
-              return 100  # Fatigue critique
+              return 2, 100  # Fatigue critique
        else:
-              return 0
+              return 0, 0
 
 
 def TauxFatigue(nbre_clainement,nbre_bâillement,clins,nbre_headDrop):
     
-    tauxClairement = tauxFatigueByClairement(nbre_clainement)
+    tauxClairement = tauxFatigueByClaignement(nbre_clainement)
     tauxBaillement = tauxFatigueByBaillement(nbre_bâillement)
     tauxClin = tauxFatigueByClin(clins)
     tauxHeadDrop = tauxFatiguebyHeadDrop(nbre_headDrop)
     
     return tauxClairement+tauxBaillement+tauxClin+tauxHeadDrop
 
+
+# Function to vizualize all the Face landmarks
+def drawFaceLandmarks(landmarks, w, h, frame):
+    face_points = []
+    # Extract and store all the landmarks in a list
+    for landmark in landmarks:
+        x = int(landmark.x * w)
+        y = int(landmark.y * h)
+        face_points.append((x, y))
+    
+    
+    # Draw all the face landmarks and connect them with lines
+    for i in range(1, len(face_points)):
+        cv2.line(frame, face_points[i - 1], face_points[i], (0, 255, 0), 1)  # Connect landmarks with green line
+    # Draw circles at each point to visualize landmarks clearly
+    for point in face_points:
+        cv2.circle(frame, point, 1, (0, 0, 255), -1)
+# Function detect the number of headrop and give a warning if it pass the taux of head drop
+def ifHeadDrop(landmarks, frame):
+    global numberHeadDrop
+    # Get nose tip landmark (landmark 1 in Mediapipe's face mesh)
+    nose_tip = landmarks[1]
+    y_position = nose_tip.y * frame.shape[0]  # Scale to pixel coordinates
+
+    # Compare current y-position with previous y-position
+    if previous_y is not None:
+        vertical_movement = previous_y - y_position
+        if vertical_movement > HEAD_DROP_THRESHOLD:
+            numberHeadDrop += 1
+    return tauxFatiguebyHeadDrop(numberHeadDrop) 
+    
 
 # Detection logic
 def detect():
@@ -207,7 +244,7 @@ def detect():
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     result = face_mesh.process(rgb_frame)
     if result.multi_face_landmarks:
-        global flag, yawn_flag, yawn_count, root
+        global flag, yawn_flag, yawn_count, wind
         
         for face_landmarks in result.multi_face_landmarks:
             landmarks = face_landmarks.landmark
@@ -223,10 +260,13 @@ def detect():
             
                 
             
-            if draw_contours:
+            if isDrawEyesContour:
                 drawContour(frame, left_eye)
                 drawContour(frame, right_eye)
-            drawContour(frame, mouth)
+            if isDrawMouthContour:
+                drawContour(frame, mouth)
+            if isDrawFaceLandmarks:
+                drawFaceLandmarks(landmarks, w, h, frame)
             # display sleep warning by eyes
             ifDrawsiness(ear, frame)
             # display warnings if tired
@@ -239,10 +279,20 @@ def detect():
     videoLabel.configure(image=imgtk)
     videoLabel.after(10, detect)
 
-# Function to Controlle the Draw of Contours
-def controlleDrawContour():
-    global draw_contours
-    draw_contours = not draw_contours
+# Function to Controlle the Draw of Eyes Contours
+def controlleDrawEyesContour():
+    global isDrawEyesContour
+    isDrawEyesContour = not isDrawEyesContour
+
+# Fonction to controlle the Draw of mouth Contour
+def controlleDrawMouthContour():
+    global isDrawMouthContour
+    isDrawMouthContour = not isDrawMouthContour
+# Fonction to controlle the Draw of the face landmarks
+def controlleDrawFaceLandmarks():
+    global isDrawFaceLandmarks
+    isDrawFaceLandmarks = not isDrawFaceLandmarks
+# Constantes
 # Thresholds and parameters
 thresh = 0.25
 yawn_thresh = 0.5
@@ -253,34 +303,36 @@ flag = 0
 yawn_flag = 0
 yawn_count = 0
 buttonCreated = False
-
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
 drawing_utils = mp.solutions.drawing_utils
 drawing_spec = drawing_utils.DrawingSpec(thickness=1, circle_radius=1)
+# Thresholds for detecting head drops
+HEAD_DROP_THRESHOLD = 30  
+frame_count = 0
+numberHeadDrop = 0
+previous_y = None 
 
 cap = None
 running = False
 
-draw_contours = False
+isDrawEyesContour = False
+isDrawMouthContour = False
+isDrawFaceLandmarks = False
 
-root = tk.Tk()
-root.title("OpenEyes")
-root.geometry("640x640")
-root.resizable(False, False)
+wind = tk.Tk()
+wind.title("OpenEyes")
+wind.geometry("640x640")
+wind.resizable(False, False)
 
-root.configure(bg="#121212")  # Dark background
-
-
-
-
+wind.configure(bg="#121212")  # Dark background
 
 background_image = Image.open("./asset/image-640x640.png")  # Replace with your image file
   # Resize to fixed window size
 bg_image = ImageTk.PhotoImage(background_image)
 
 # Create a label to hold the background image
-bg_label = tk.Label(root, image=bg_image)
+bg_label = tk.Label(wind, image=bg_image)
 bg_label.place(x=0, y=0, relwidth=1, relheight=1) 
 
 
@@ -295,7 +347,7 @@ button_style = {
     "font": ("Helvetica", 9, "bold"),
     "bd": 0,  # Borderless
     "relief": "flat",
-    "width": 20,
+    "width": 10,
     "height": 2
 }
 
@@ -306,20 +358,22 @@ label_style = {
 }
 
 # Video Label
-videoLabel = Label(root, text="Keeping Drivers Awake, One Blink at a Time", **label_style)
+videoLabel = Label(wind, text="Keeping Drivers Awake, One Blink at a Time", **label_style)
 videoLabel.pack(pady=20)
 
 # Buttons
-startButton = tk.Button(root, text="Start Detection", command=start_detection, **button_style)
+startButton = tk.Button(wind, text="Start", command=start_detection, **button_style)
 startButton.pack(pady=10)
 
-stopButton = tk.Button(root, text="Stop Detection", command=stop_detection, **button_style)
+stopButton = tk.Button(wind, text="Stop", command=stop_detection, **button_style)
 stopButton.pack_forget()  # Initially hidden
 
-btn_test = tk.Button(root, text="Draw Eyes", command=controlleDrawContour, **button_style)
-btn_test.pack_forget()  # Initially hidden
+drawEyesButton = tk.Button(wind, text="Eyes", command=controlleDrawEyesContour, **button_style)
+drawEyesButton.pack_forget()
 
+drawMouthButton = tk.Button(wind, text="Mouth", command=controlleDrawMouthContour,**button_style)
+drawEyesButton.pack_forget()
 
-
-# Main Loop
-root.mainloop()
+drawFaceLandmarksButton = tk.Button(wind, text="Face", command=controlleDrawFaceLandmarks , **button_style)
+drawFaceLandmarksButton.pack_forget()
+wind.mainloop()
